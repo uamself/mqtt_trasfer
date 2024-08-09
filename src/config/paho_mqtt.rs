@@ -35,7 +35,7 @@ pub async fn do_subscribe() {
 
     if let Err(err) = block_on(async move {
         // Get message stream before connecting.
-        let mut strm = cli.get_stream(25);
+        let mut strm = cli.get_stream(1);
 
         // Define the set of options for the connection
         let lwt = mqtt::Message::new(
@@ -53,15 +53,7 @@ pub async fn do_subscribe() {
             .finalize();
 
         // Make the connection to the broker
-        let x = cli.connect(conn_opts.clone()).await;
-        match x {
-            Ok(_) => {
-                println!("Connection established")
-            }
-            Err(e) => {
-                println!("Error connecting to broker: {}", e)
-            }
-        }
+        cli.connect(conn_opts.clone()).await?;
 
         println!("Subscribing to topics: {:?}", TOPICS);
         cli.subscribe_many(TOPICS, QOS).await?;
@@ -70,27 +62,28 @@ pub async fn do_subscribe() {
         println!("Waiting for messages...");
 
         // -----------------------获取本地的连接start---------------------------
-        // let client: paho_mqtt::AsyncClient = get_client_of_local_mqtt().await;
-        // let conn_opts_local = mqtt::ConnectOptionsBuilder::new_v3()
-        //     .keep_alive_interval(std::time::Duration::from_secs(20))
-        //     .user_name("poyezkwcxw2b")
-        //     .password("yc0amqq6i6oxy0b6j3f3")
-        //     .clean_session(false)
-        //     .will_message(lwt.clone())
-        //     .finalize();
-        // client.connect(conn_opts_local.clone()).await?;
+        let client: paho_mqtt::AsyncClient = get_client_of_local_mqtt().await;
+        let conn_opts_local = mqtt::ConnectOptionsBuilder::new_v3()
+            .keep_alive_interval(std::time::Duration::from_secs(20))
+            .user_name("poyezkwcxw2b")
+            .password("yc0amqq6i6oxy0b6j3f3")
+            .clean_session(false)
+            .will_message(lwt.clone())
+            .finalize();
+        client.connect(conn_opts_local.clone()).await?;
         // -----------------------获取本地的连接end---------------------------
 
         while let Some(msg_opt) = strm.next().await {
             if let Some(msg) = msg_opt {
                 let tp = msg.topic();
                 println!("tp is {:?}", tp);
-                // let msg = mqtt::Message::new(tp, msg.payload(), 1);
-                // client.publish(msg);
+                let msg = mqtt::Message::new(tp, msg.payload(), 1);
+                client.publish(msg);
             } else {
                 // A "None" means we were disconnected. Try to reconnect...
                 println!("Lost connection. Attempting reconnect...");
-                while let Err(_) = cli.reconnect().await {
+                while let Err(e) = cli.reconnect().await {
+                    println!("error = {:?}", e);
                     sleep(Duration::from_secs(1)).await;
                 }
                 println!("Reconnected.");
